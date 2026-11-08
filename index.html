@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Themen-Voting: Was wäre wenn?</title>
+    <!-- Firebase Realtime Database SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <style>
         * {
             box-sizing: border-box;
@@ -296,7 +299,7 @@
         .live-status {
             text-align: center;
             font-size: 0.8rem;
-            color: #475569;
+            color: #3b82f6;
             margin-top: 1.25rem;
         }
     </style>
@@ -318,25 +321,30 @@
                 <p>Insgesamt abgegebene Stimmen: <span id="totalVotes">0</span></p>
             </div>
             <div class="summary-btns">
-                <button type="button" class="btn" id="refreshBtn">🔄 Aktualisieren</button>
                 <button type="button" class="btn" onclick="window.print()">🖨️ Drucken / PDF</button>
                 <button type="button" class="btn" id="adminResetBtn" style="display: none; border-color: #ef4444; color: #f87171;">⚠️ Reset (Admin)</button>
             </div>
         </div>
         <div class="results-container" id="resultsContainer"></div>
-        <div class="live-status" id="liveStatus">Initialisiere...</div>
+        <div class="live-status" id="liveStatus">● Live mit Firebase verbunden</div>
     </div>
 </div>
 
 <script>
-    // Unique namespace for your poll
-    const POLL_ID = "royalcore_umfrage_2026";
-    const STORAGE_KEY_VOTED = "voted_choice_" + POLL_ID;
-    const STORAGE_KEY_LOCAL_COUNTS = "cached_counts_" + POLL_ID;
+    const FIREBASE_DB_URL = "https://was-wenn-86cb1-default-rtdb.europe-west1.firebasedatabase.app";
+
+    // Initialize Firebase Realtime Database
+    firebase.initializeApp({
+        databaseURL: FIREBASE_DB_URL
+    });
+    const db = firebase.database();
+    const votesRef = db.ref("votes");
+
+    const STORAGE_KEY_VOTED = "was_waere_wenn_voted_topic";
 
     const topics = [
         {
-            key: "fahrstuhl",
+            key: "t1_fahrstuhl",
             icon: "🛗",
             cat: "Kosmos & Physik",
             title: "Fahrstuhl ins All",
@@ -344,7 +352,7 @@
             desc: "Was isst du unterwegs, wann wird der Himmel pechschwarz und ab welcher Höhe schwebst du schwerelos in der Kabine?"
         },
         {
-            key: "ameisen",
+            key: "t2_ameisen",
             icon: "🐜",
             cat: "Biologie & Natur",
             title: "Alle Ameisen auf einer Waage",
@@ -352,7 +360,7 @@
             desc: "Wie sähe der astronomische Berg aus Biomasse aus und was bedeutet dieser Vergleich für das irdische Ökosystem?"
         },
         {
-            key: "licht",
+            key: "t3_licht",
             icon: "⚡",
             cat: "Physik & Relativität",
             title: "Lichtgeschwindigkeit bei 100 km/h",
@@ -360,7 +368,7 @@
             desc: "Das Sonnenlicht bräuchte Stunden zu uns, Anrufe wären unmöglich und ein Spaziergang würde zur visuellen Zeitreise."
         },
         {
-            key: "mond",
+            key: "t4_mond",
             icon: "🌕",
             cat: "Astronomie & Schwerkraft",
             title: "Der Mond 100 km über deiner Stadt",
@@ -368,7 +376,7 @@
             desc: "Gigantische Gezeitenkräften, Gravitationschaos und die Frage: Könnte man ihn mit einer Rakete sofort berühren?"
         },
         {
-            key: "photosynthese",
+            key: "t5_photosynthese",
             icon: "🌱",
             cat: "Mensch & Biochemie",
             title: "Menschen mit Photosynthese",
@@ -376,7 +384,7 @@
             desc: "Wie viel Quadratmeter Hautoberfläche müsstest du freilegen, um deinen täglichen Kalorienbedarf wirklich zu decken?"
         },
         {
-            key: "cola",
+            key: "t6_cola",
             icon: "🥤",
             cat: "Klima & Experiment",
             title: "Die Ozeane bestehen aus Cola",
@@ -384,7 +392,7 @@
             desc: "Zuckergehalt, Säureätzung, CO2-Entgasung und gigantische Schlammstrände zerstören Küsten und das Erdklima."
         },
         {
-            key: "sekunde",
+            key: "t7_sekunde",
             icon: "🧠",
             cat: "Gehirn & Psychologie",
             title: "Jede Sekunde bewusst erleben",
@@ -392,7 +400,7 @@
             desc: "Wie verändert sich dein Gehirn, wenn Schlaf nicht mehr das Bewusstsein ausschaltet und Langeweile unerträglich wird?"
         },
         {
-            key: "song",
+            key: "t8_song",
             icon: "🎶",
             cat: "Gesellschaft & Technik",
             title: "8 Milliarden hören denselben Song",
@@ -401,30 +409,15 @@
         }
     ];
 
-    // Load initial counts from cache if available, else start at 0
     let counts = {};
     topics.forEach(t => counts[t.key] = 0);
 
-    const savedCounts = localStorage.getItem(STORAGE_KEY_LOCAL_COUNTS);
-    if (savedCounts) {
-        try {
-            const parsed = JSON.parse(savedCounts);
-            topics.forEach(t => {
-                if (typeof parsed[t.key] === 'number') counts[t.key] = parsed[t.key];
-            });
-        } catch(e) {}
-    }
-
     let myVotedKey = localStorage.getItem(STORAGE_KEY_VOTED) || null;
-    if (myVotedKey && counts[myVotedKey] === 0) {
-        counts[myVotedKey] = 1; // Guarantee local vote is visible
-    }
 
     const grid = document.getElementById("cardsGrid");
     const resultsContainer = document.getElementById("resultsContainer");
     const totalVotesEl = document.getElementById("totalVotes");
     const liveStatus = document.getElementById("liveStatus");
-    const refreshBtn = document.getElementById("refreshBtn");
     const adminResetBtn = document.getElementById("adminResetBtn");
 
     if (new URLSearchParams(window.location.search).get("admin") === "1") {
@@ -462,59 +455,31 @@
         };
     });
 
-    // Public reliable key-value backend
-    const API_URL = "https://api.counterapi.dev/v1";
-
-    async function syncOnline() {
-        liveStatus.textContent = "Synchronisiere weltweite Stimmen...";
-        try {
-            const promises = topics.map(async t => {
-                try {
-                    const res = await fetch(`${API_URL}/${POLL_ID}/${t.key}`, { cache: "no-store" });
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (typeof data.count === "number") {
-                            // Take max of online count and our local guaranteed count
-                            counts[t.key] = Math.max(counts[t.key] || 0, data.count);
-                        }
-                    }
-                } catch (err) {}
-            });
-
-            await Promise.all(promises);
-            localStorage.setItem(STORAGE_KEY_LOCAL_COUNTS, JSON.stringify(counts));
-            liveStatus.textContent = "● Live synchronisiert";
-        } catch (e) {
-            liveStatus.textContent = "● Stimmen lokal gespeichert";
-        }
+    // Listen to Realtime updates from Firebase
+    votesRef.on("value", snapshot => {
+        const data = snapshot.val() || {};
+        topics.forEach(t => {
+            counts[t.key] = typeof data[t.key] === "number" ? data[t.key] : 0;
+        });
+        liveStatus.textContent = "● Live synchronisiert";
         render();
-    }
+    }, error => {
+        console.error("Firebase error:", error);
+        liveStatus.textContent = "Verbindungsfehler zur Datenbank";
+    });
 
-    async function handleVote(key) {
-        if (myVotedKey) return; // Prevent multiple voting
+    function handleVote(key) {
+        if (myVotedKey) return; // Prevent multiple voting per device
 
         myVotedKey = key;
         localStorage.setItem(STORAGE_KEY_VOTED, key);
-        counts[key] = (counts[key] || 0) + 1;
-        localStorage.setItem(STORAGE_KEY_LOCAL_COUNTS, JSON.stringify(counts));
-        
-        // Immediate UI feedback
-        render();
 
-        liveStatus.textContent = "Sende deine Stimme...";
-        try {
-            const res = await fetch(`${API_URL}/${POLL_ID}/${key}/up`, { method: "GET", cache: "no-store" });
-            if (res.ok) {
-                const data = await res.json();
-                if (typeof data.count === "number") {
-                    counts[key] = Math.max(counts[key], data.count);
-                    localStorage.setItem(STORAGE_KEY_LOCAL_COUNTS, JSON.stringify(counts));
-                }
-            }
-            liveStatus.textContent = "✓ Deine Stimme wurde weltweit gespeichert!";
-        } catch (e) {
-            liveStatus.textContent = "✓ Deine Stimme wurde gezählt!";
-        }
+        // Atomic transaction directly in Firebase
+        const topicRef = db.ref("votes/" + key);
+        topicRef.transaction(currentValue => {
+            return (currentValue || 0) + 1;
+        });
+
         render();
     }
 
@@ -542,7 +507,7 @@
             }
         });
 
-        // Sorted standings
+        // Standings
         const sorted = [...topics].sort((a, b) => (counts[b.key] || 0) - (counts[a.key] || 0));
         resultsContainer.innerHTML = "";
 
@@ -568,21 +533,15 @@
         });
     }
 
-    refreshBtn.addEventListener("click", syncOnline);
-
     adminResetBtn.addEventListener("click", () => {
-        if (confirm("Deine eigene Stimme zurücksetzen?")) {
+        if (confirm("Möchtest du deine Stimme im Browser zurücksetzen?")) {
             localStorage.removeItem(STORAGE_KEY_VOTED);
             myVotedKey = null;
-            if (counts["cola"] > 0) counts["cola"]--;
-            localStorage.setItem(STORAGE_KEY_LOCAL_COUNTS, JSON.stringify(counts));
             render();
-            syncOnline();
         }
     });
 
     render();
-    syncOnline();
 </script>
 
 </body>
